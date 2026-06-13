@@ -28,7 +28,8 @@ app.post('/api/analyze', upload.single('image'), SearchController.analyze)
 if (process.env.NODE_ENV === 'production') {
   const distPath = path.join(__dirname, '../dist')
   app.use(express.static(distPath))
-  app.get('*', (_req, res) => res.sendFile(path.join(distPath, 'index.html')))
+  // Express 5 requires named wildcard params — use regex for SPA fallback
+  app.get(/(.*)/, (_req, res) => res.sendFile(path.join(distPath, 'index.html')))
 }
 
 // ── Error handler ───────────────────────────────────────────────
