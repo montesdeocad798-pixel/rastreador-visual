@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(New-Item *)",
+      "PowerShell(npx vite build 2>&1)",
+      "PowerShell(npm install *)"
+    ]
+  }
+}
