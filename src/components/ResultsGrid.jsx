@@ -1,23 +1,82 @@
 import { useState } from 'react'
 import ProductCard from './ProductCard'
 import FilterBar from './FilterBar'
-import { mockProducts } from '../data/mockProducts'
+import FeedbackLog from './FeedbackLog'
+import { useFeedback } from '../hooks/useFeedback'
 
-export default function ResultsGrid({ image, onReset }) {
-  const [selectedSize, setSelectedSize] = useState(35)
-  const [maxPrice, setMaxPrice] = useState(Infinity)
-  const [onlyInStock, setOnlyInStock] = useState(false)
+function parsePrice(str) {
+  return parseFloat((str ?? '0').replace(/[^0-9.,]/g, '').replace(',', '.')) || 0
+}
 
-  const filtered = mockProducts.filter((p) => {
-    if (selectedSize !== null && !p.sizes.includes(selectedSize)) return false
-    if (p.priceValue > maxPrice) return false
+function normalizeProduct(p, index) {
+  return {
+    id:             p.id ?? `r${index}`,
+    store:          p.tienda_nombre ?? p.store ?? 'Tienda',
+    price:          p.precio_real   ?? p.price ?? '—',
+    priceValue:     parsePrice(p.precio_real ?? p.price),
+    match:          p.match         ?? 0,
+    image:          p.imagen_url    ?? p.image ?? `https://picsum.photos/seed/p${index}/300/400`,
+    sizes:          p.sizes         ?? [],
+    inStock:        p.inStock       ?? true,
+    linkAfiliado:   p.link_afiliado ?? null,
+    nombreProducto: p.nombre_producto ?? null,
+  }
+}
+
+export default function ResultsGrid({ image, products = [], attributes, isDemo, onReset }) {
+  const [selectedSize, setSelectedSize] = useState(null)
+  const [maxPrice, setMaxPrice]         = useState(Infinity)
+  const [onlyInStock, setOnlyInStock]   = useState(false)
+
+  const { report, restore, clearAll, getCount, isBlocked, blockedEntries } = useFeedback()
+
+  const normalized = products.map(normalizeProduct)
+
+  const filtered = normalized.filter((p) => {
+    if (isBlocked(p.id)) return false
+    if (selectedSize && p.sizes.length > 0 && !p.sizes.includes(selectedSize)) return false
+    if (p.priceValue > 0 && p.priceValue > maxPrice) return false
     if (onlyInStock && !p.inStock) return false
     return true
   })
 
+  const totalHidden = normalized.length - filtered.length
+
   return (
     <div className="max-w-5xl mx-auto px-4 py-10">
-      {/* Header row */}
+
+      {/* Demo notice */}
+      {isDemo && (
+        <div className="mb-6 px-4 py-3 bg-amber-50 border border-amber-100 rounded-xl flex items-start gap-3">
+          <span className="text-amber-500 text-sm mt-0.5">⚠</span>
+          <div>
+            <p className="text-xs font-medium text-amber-700">Modo demo activo</p>
+            <p className="text-xs text-amber-600 font-light mt-0.5">
+              Configura <code className="bg-amber-100 px-1 rounded">GEMINI_API_KEY</code> y <code className="bg-amber-100 px-1 rounded">SERPER_API_KEY</code> en el archivo <code className="bg-amber-100 px-1 rounded">.env</code> para resultados reales.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Attributes summary */}
+      {attributes && (
+        <div className="mb-6 px-4 py-3 bg-white border border-slate-100 rounded-xl flex flex-wrap gap-x-4 gap-y-1.5">
+          {[
+            ['Tipo', attributes.tipo],
+            ['Color', attributes.color_principal],
+            ['Material', attributes.material],
+            ['Marca', attributes.marca_visible ?? 'Marca no identificada'],
+            ['Estrategia', attributes.brand_strategy === 'brand_match' ? 'Búsqueda por marca' : 'Similitud visual'],
+          ].map(([k, v]) => (
+            <div key={k} className="flex items-baseline gap-1.5">
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">{k}</span>
+              <span className={`text-xs font-light ${k === 'Marca' && !attributes.marca_visible ? 'text-slate-400 italic' : 'text-slate-700'}`}>{v}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-4">
           <div className="w-12 h-16 rounded-xl overflow-hidden shadow-md flex-shrink-0 ring-1 ring-slate-100">
@@ -25,17 +84,14 @@ export default function ResultsGrid({ image, onReset }) {
           </div>
           <div>
             <h2 className="text-lg font-medium text-slate-900">
-              {filtered.length}{' '}
-              {filtered.length === mockProducts.length
-                ? 'resultados encontrados'
-                : `de ${mockProducts.length} resultados`}
+              {filtered.length}{totalHidden > 0 ? ` de ${normalized.length} resultados` : ' resultados encontrados'}
             </h2>
             <p className="text-slate-400 text-xs mt-0.5 font-light">
               Ordenados por coincidencia · IA visual
+              {totalHidden > 0 && <span className="text-rose-300 ml-1.5">· {totalHidden} ocultos</span>}
             </p>
           </div>
         </div>
-
         <button
           onClick={onReset}
           className="text-xs text-slate-400 hover:text-slate-700 transition-colors underline underline-offset-2 font-light"
@@ -44,7 +100,7 @@ export default function ResultsGrid({ image, onReset }) {
         </button>
       </div>
 
-      {/* Filter bar */}
+      {/* Filters */}
       <FilterBar
         selectedSize={selectedSize}
         onSizeChange={setSelectedSize}
@@ -54,21 +110,14 @@ export default function ResultsGrid({ image, onReset }) {
         onToggleStock={setOnlyInStock}
       />
 
-      {/* Divider */}
       <div className="h-px bg-slate-100 mb-8" />
 
-      {/* Products grid or empty state */}
+      {/* Grid */}
       {filtered.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 text-center">
-          <p className="text-slate-400 text-sm font-light">
-            Ningún resultado con estos filtros.
-          </p>
+          <p className="text-slate-400 text-sm font-light">Ningún resultado con estos filtros.</p>
           <button
-            onClick={() => {
-              setSelectedSize(null)
-              setMaxPrice(Infinity)
-              setOnlyInStock(false)
-            }}
+            onClick={() => { setSelectedSize(null); setMaxPrice(Infinity); setOnlyInStock(false) }}
             className="mt-3 text-xs text-slate-600 underline underline-offset-2 hover:text-slate-900 transition-colors"
           >
             Limpiar filtros
@@ -77,10 +126,18 @@ export default function ResultsGrid({ image, onReset }) {
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4">
           {filtered.map((product, i) => (
-            <ProductCard key={product.id} product={product} index={i} />
+            <ProductCard
+              key={product.id}
+              product={product}
+              index={i}
+              feedbackCount={getCount(product.id)}
+              onFeedback={report}
+            />
           ))}
         </div>
       )}
+
+      <FeedbackLog blockedEntries={blockedEntries} onRestore={restore} onClearAll={clearAll} />
     </div>
   )
 }

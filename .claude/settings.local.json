@@ -3,7 +3,11 @@
     "allow": [
       "PowerShell(New-Item *)",
       "PowerShell(npx vite build 2>&1)",
-      "PowerShell(npm install *)"
+      "PowerShell(npm install *)",
+      "PowerShell(npm run *)",
+      "PowerShell(railway up *)",
+      "PowerShell(railway status *)",
+      "PowerShell(railway domain *)"
     ]
   }
 }
