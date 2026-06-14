@@ -10,24 +10,22 @@ function parsePrice(str) {
 
 function normalizeProduct(p, index) {
   return {
-    id:             p.id ?? `r${index}`,
-    store:          p.tienda_nombre ?? p.store ?? 'Tienda',
-    price:          p.precio_real   ?? p.price ?? '—',
+    id:             p.id             ?? `r${index}`,
+    store:          p.tienda_nombre  ?? p.store ?? 'Tienda',
+    price:          p.precio_real    ?? p.price ?? '—',
     priceValue:     parsePrice(p.precio_real ?? p.price),
-    match:          p.match         ?? 0,
-    image:          p.imagen_url    ?? p.image ?? `https://picsum.photos/seed/p${index}/300/400`,
-    sizes:          p.sizes         ?? [],
-    inStock:        p.inStock       ?? true,
-    linkAfiliado:   p.link_afiliado ?? null,
+    match:          p.match          ?? 0,
+    image:          p.imagen_url     ?? p.image ?? `https://picsum.photos/seed/p${index}/300/400`,
+    sizes:          p.sizes          ?? [],
+    inStock:        p.inStock        ?? true,
+    linkAfiliado:   p.link_afiliado  ?? null,
     nombreProducto: p.nombre_producto ?? null,
   }
 }
 
-// Render attributes panel for both Gemini-format and browser-extracted-format
 function AttributeChips({ attributes }) {
   if (!attributes) return null
 
-  // Gemini format (new: subtipo/color/queryBusqueda — or legacy: tipo/color_principal)
   const isGemini = 'subtipo' in attributes || 'tipo' in attributes || 'color_principal' in attributes
   const chips = isGemini
     ? [
@@ -46,7 +44,7 @@ function AttributeChips({ attributes }) {
       ]
 
   return (
-    <div className="mb-6 px-4 py-3 bg-white border border-slate-100 rounded-xl flex flex-wrap gap-x-4 gap-y-1.5">
+    <div className="mb-4 px-4 py-3 bg-white border border-slate-100 rounded-xl flex flex-wrap gap-x-4 gap-y-1.5">
       {chips.map(([k, v]) => v && (
         <div key={k} className="flex items-baseline gap-1.5">
           <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">{k}</span>
@@ -58,7 +56,7 @@ function AttributeChips({ attributes }) {
 }
 
 export default function ResultsGrid({
-  image, products = [], attributes, isDemo, onReset,
+  image, products = [], attributes, isDemo, onReset, onRetry,
   sessionId, fingerprint, category,
 }) {
   const [selectedSize, setSelectedSize] = useState(null)
@@ -77,22 +75,13 @@ export default function ResultsGrid({
   })
   const totalHidden = normalized.length - filtered.length
 
-  // Fires server-side feedback and optionally blocks the product locally
   const sendFeedbackToServer = useCallback((productId, storeName, confirmed) => {
     if (!sessionId && !fingerprint) return
     fetch('/api/feedback', {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        sessionId,
-        productId,
-        storeName,
-        confirmed,
-        fingerprint,
-        category,
-        attributes,
-      }),
-    }).catch(() => {}) // fire-and-forget — never block the UI
+      body: JSON.stringify({ sessionId, productId, storeName, confirmed, fingerprint, category, attributes }),
+    }).catch(() => {})
   }, [sessionId, fingerprint, category, attributes])
 
   const handleNegativeFeedback = useCallback((productId, meta) => {
@@ -105,11 +94,11 @@ export default function ResultsGrid({
   }, [sendFeedbackToServer])
 
   return (
-    <div className="max-w-5xl mx-auto px-4 py-10">
+    <div className="max-w-5xl mx-auto px-4 py-6">
 
       {/* Demo notice */}
       {isDemo && (
-        <div className="mb-6 px-4 py-3 bg-amber-50 border border-amber-100 rounded-xl flex items-start gap-3">
+        <div className="mb-4 px-4 py-3 bg-amber-50 border border-amber-100 rounded-xl flex items-start gap-3">
           <span className="text-amber-500 text-sm mt-0.5">⚠</span>
           <div>
             <p className="text-xs font-medium text-amber-700">Modo demo activo</p>
@@ -122,30 +111,45 @@ export default function ResultsGrid({
 
       <AttributeChips attributes={attributes} />
 
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-4">
-          <div className="w-12 h-16 rounded-xl overflow-hidden shadow-md flex-shrink-0 ring-1 ring-slate-100">
+      {/* Results header — stacks vertically on mobile, row on sm+ */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+        {/* Left: thumbnail + count */}
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-14 sm:w-12 sm:h-16 rounded-xl overflow-hidden shadow-md flex-shrink-0 ring-1 ring-slate-100">
             <img src={image} alt="Tu prenda" className="w-full h-full object-cover" />
           </div>
           <div>
-            <h2 className="text-lg font-medium text-slate-900">
-              {filtered.length}{totalHidden > 0 ? ` de ${normalized.length} resultados` : ' resultados encontrados'}
+            <h2 className="text-base sm:text-lg font-medium text-slate-900">
+              {filtered.length}
+              {totalHidden > 0 ? ` de ${normalized.length} resultados` : ' resultados encontrados'}
             </h2>
             <p className="text-slate-400 text-xs mt-0.5 font-light">
-              Ordenados por coincidencia · análisis en dispositivo
+              Ordenados por similitud visual
               {totalHidden > 0 && <span className="text-rose-300 ml-1.5">· {totalHidden} ocultos</span>}
             </p>
           </div>
         </div>
-        <button
-          onClick={onReset}
-          className="text-xs text-slate-400 hover:text-slate-700 transition-colors underline underline-offset-2 font-light"
-        >
-          Nueva búsqueda
-        </button>
+
+        {/* Right: action buttons */}
+        <div className="flex items-center gap-4 sm:flex-col sm:items-end sm:gap-1.5">
+          {onRetry && (
+            <button
+              onClick={onRetry}
+              className="text-xs font-medium text-slate-700 hover:text-slate-900 transition-colors underline underline-offset-2"
+            >
+              Buscar de nuevo
+            </button>
+          )}
+          <button
+            onClick={onReset}
+            className="text-xs font-light text-slate-400 hover:text-slate-600 transition-colors underline underline-offset-2"
+          >
+            Nueva búsqueda
+          </button>
+        </div>
       </div>
 
+      {/* FilterBar is sticky internally (top-16), separator below */}
       <FilterBar
         selectedSize={selectedSize}
         onSizeChange={setSelectedSize}
@@ -155,8 +159,9 @@ export default function ResultsGrid({
         onToggleStock={setOnlyInStock}
       />
 
-      <div className="h-px bg-slate-100 mb-8" />
+      <div className="h-px bg-slate-100 mt-4 mb-6" />
 
+      {/* Product grid — 2 cols mobile → 3 sm → 4 md → 6 lg */}
       {filtered.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 text-center">
           <p className="text-slate-400 text-sm font-light">Ningún resultado con estos filtros.</p>
@@ -168,7 +173,7 @@ export default function ResultsGrid({
           </button>
         </div>
       ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 sm:gap-4">
           {filtered.map((product, i) => (
             <ProductCard
               key={product.id}

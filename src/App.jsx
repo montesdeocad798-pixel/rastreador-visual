@@ -33,13 +33,18 @@ export default function App() {
     if (!uploadedFile || !category) return
     setStage('scanning')
     setError(null)
+    setScanProgress('Analizando prenda con IA visual...')
+
+    // Timed progress messages so the spinner shows meaningful text
+    // during Gemini analysis + visual re-ranking (~5–12 s total)
+    const t1 = setTimeout(() => setScanProgress('Identificando color, material y detalles...'), 3500)
+    const t2 = setTimeout(() => setScanProgress('Afinando resultados visualmente...'), 7500)
+    const clearTimers = () => { clearTimeout(t1); clearTimeout(t2) }
 
     let products = [], attrs = null, demo = false, sid = null
 
-    // ── Intento 1: Gemini Vision (imagen al servidor) ─────────────────────────
+    // ── Intento 1: Gemini Vision ────────────────────────────────────────────
     try {
-      setScanProgress('Analizando prenda con IA visual...')
-
       const formData = new FormData()
       formData.append('image', uploadedFile)
       formData.append('category', category)
@@ -47,25 +52,23 @@ export default function App() {
       const res  = await fetch('/api/analyze', { method: 'POST', body: formData })
       const data = await res.json()
 
-      if (data.fallbackRequired) {
-        throw new Error(`gemini_unavailable: ${data.detail ?? data.error}`)
-      }
-      if (!res.ok) {
-        throw new Error(data.error ?? `Error ${res.status}`)
-      }
+      if (data.fallbackRequired) throw new Error(`gemini_unavailable: ${data.detail ?? data.error}`)
+      if (!res.ok) throw new Error(data.error ?? `Error ${res.status}`)
 
       products = data.products  ?? []
       attrs    = data.attributes ?? null
       demo     = data.demo       ?? false
 
     } catch (geminiErr) {
-      // ── Intento 2: análisis local en el navegador (fallback) ──────────────
+      // ── Intento 2: análisis local en navegador (fallback) ──────────────
       console.warn('[App] Gemini no disponible, activando análisis local:', geminiErr.message)
+      clearTimeout(t1)
+      clearTimeout(t2)
+
       try {
         setScanProgress('IA visual no disponible — analizando en dispositivo...')
 
         const localResult = await analyzeLocally(uploadedFile, category, setScanProgress)
-
         setScanProgress('Buscando productos...')
 
         const res  = await fetch('/api/analyze-local', {
@@ -86,12 +89,14 @@ export default function App() {
         sid      = data.sessionId ?? null
 
       } catch (localErr) {
+        clearTimers()
         setError(localErr.message)
         setStage('error')
         return
       }
     }
 
+    clearTimers()
     setProducts(products)
     setAttributes(attrs)
     setIsDemo(demo)
@@ -123,7 +128,8 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <header className="h-16 bg-white border-b border-slate-100 flex items-center justify-between px-6 sticky top-0 z-10">
+      {/* Header — h-16 = 64 px; FilterBar uses sticky top-16 to sit just below */}
+      <header className="h-16 bg-white border-b border-slate-100 flex items-center justify-between px-6 sticky top-0 z-20">
         <button onClick={stage !== 'idle' ? handleReset : undefined} className="flex items-center gap-2.5">
           <div className="w-7 h-7 rounded-lg bg-slate-900 flex items-center justify-center">
             <span className="text-white text-xs font-semibold">R</span>
@@ -167,6 +173,7 @@ export default function App() {
             attributes={attributes}
             isDemo={isDemo}
             onReset={handleReset}
+            onRetry={handleAnalyze}
             sessionId={sessionId}
             fingerprint={fingerprint}
             category={category}
