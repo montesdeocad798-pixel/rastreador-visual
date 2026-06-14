@@ -1,6 +1,7 @@
 import { buildROIPrompt } from '../services/roiService.js'
 import { analyzeImageWithROI } from '../services/visionService.js'
 import { searchProducts } from '../services/searchService.js'
+import { rerankByVisualSimilarity } from '../services/rerankService.js'
 
 const DEMO_MODE = !process.env.GEMINI_API_KEY || !process.env.SERPER_API_KEY
 
@@ -40,17 +41,25 @@ export const SearchController = {
         })
       }
 
-      // 1. Build category-aware ROI prompt
+      // 1. Category-aware ROI prompt
       const roiPrompt = buildROIPrompt(category)
 
-      // 2. Gemini Vision analysis
+      // 2. Gemini Vision — extracts structured attributes from the garment
       const attributes = await analyzeImageWithROI(req.file.buffer, req.file.mimetype, roiPrompt)
-
-      // 3. Brand strategy
       attributes.brand_strategy = attributes.marca_visible ? 'brand_match' : 'visual_similarity'
 
-      // 4. Product search
-      const products = await searchProducts(attributes)
+      // 3. Serper.dev shopping search
+      const rawProducts = await searchProducts(attributes)
+
+      // 4. Visual re-ranking — Gemini scores each thumbnail against the original photo.
+      //    Falls back to rawProducts silently if anything goes wrong (no 500).
+      //    Only runs when req.file exists (guaranteed here) — not called from /analyze-local.
+      const products = await rerankByVisualSimilarity(
+        req.file.buffer,
+        req.file.mimetype,
+        rawProducts,
+        category
+      )
 
       res.json({
         demo: false,
@@ -61,7 +70,7 @@ export const SearchController = {
 
     } catch (err) {
       console.error('[SearchController] Error:', err.message)
-      // Signal the client to fall back to local browser analysis instead of showing a 500
+      // 422 signals the client to fall back to local browser analysis
       res.status(422).json({
         fallbackRequired: true,
         error: 'Análisis visual no disponible temporalmente.',
