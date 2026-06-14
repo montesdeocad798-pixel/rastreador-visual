@@ -7,7 +7,7 @@ const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY)
  * Devuelve los atributos visuales de la prenda como objeto JSON.
  */
 export async function analyzeImageWithROI(imageBuffer, mimeType, roiPrompt) {
-  const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' })
+  const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
 
   const imagePart = {
     inlineData: {
