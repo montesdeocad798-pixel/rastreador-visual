@@ -17,6 +17,7 @@ const ROI = {
   jacket:      { y0: 0.05, y1: 0.60 },
   shirt:       { y0: 0.05, y1: 0.55 },
   pants:       { y0: 0.35, y1: 1.00 },
+  skirt:       { y0: 0.35, y1: 1.00 },
   dress:       { y0: 0.05, y1: 0.95 },
   accessories: { y0: 0.00, y1: 0.60 },
 }

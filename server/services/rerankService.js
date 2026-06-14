@@ -26,7 +26,8 @@ const CATEGORY_HINT = {
   jacket:      'chaqueta, abrigo o cazadora (parte superior)',
   shirt:       'camisa, camiseta o top (parte superior)',
   pants:       'pantalón, jeans o leggins (parte inferior)',
-  dress:       'vestido o falda (prenda completa)',
+  skirt:       'falda o minifalda (parte inferior de la imagen)',
+  dress:       'vestido largo o midi (prenda completa)',
   accessories: 'accesorio, joyería o complemento',
 }
 

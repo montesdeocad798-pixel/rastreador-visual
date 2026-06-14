@@ -1,5 +1,23 @@
 import { CATEGORIES } from '../config/storesConfig.js'
 
+function SkirtIcon() {
+  return (
+    <svg
+      className="w-5 h-5"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <rect x="7" y="3" width="10" height="3" rx="1.5" />
+      <path d="M7 6 L4 21 H20 L17 6 Z" />
+    </svg>
+  )
+}
+
 export default function CategorySelector({ image, selected, onSelect, onConfirm, onBack }) {
   return (
     <div className="flex flex-col items-center justify-center min-h-[calc(100vh-64px)] px-4 py-10">
@@ -33,7 +51,10 @@ export default function CategorySelector({ image, selected, onSelect, onConfirm,
               }
             `}
           >
-            <span className="text-xl leading-none">{cat.emoji}</span>
+            {cat.emoji
+              ? <span className="text-xl leading-none">{cat.emoji}</span>
+              : <SkirtIcon />
+            }
             <span className="text-[10px] font-medium leading-tight">{cat.label}</span>
           </button>
         ))}

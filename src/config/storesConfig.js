@@ -19,7 +19,8 @@ export const CATEGORIES = [
   { id: 'jacket',      label: 'Chaqueta',     emoji: '🧥', roi: 'chaqueta, abrigo o cazadora' },
   { id: 'shirt',       label: 'Camisa/Top',   emoji: '👕', roi: 'camisa, camiseta o top' },
   { id: 'pants',       label: 'Pantalón',     emoji: '👖', roi: 'pantalón, jeans o leggins' },
-  { id: 'dress',       label: 'Vestido',      emoji: '👗', roi: 'vestido o falda' },
+  { id: 'skirt',       label: 'Falda',        emoji: null, roi: 'falda o minifalda' },
+  { id: 'dress',       label: 'Vestido',      emoji: '👗', roi: 'vestido largo o midi' },
   { id: 'accessories', label: 'Accesorios',   emoji: '💍', roi: 'accesorio, joyería, cinturón o gafas' },
 ]
 

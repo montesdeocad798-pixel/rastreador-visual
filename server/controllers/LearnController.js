@@ -119,7 +119,7 @@ function buildSearchQuery(category, attributes, boost) {
   const CATEGORY_ES = {
     boots: 'botas mujer', sneakers: 'zapatillas mujer', bag: 'bolso mujer',
     jacket: 'chaqueta mujer', shirt: 'camiseta mujer', pants: 'pantalón mujer',
-    dress: 'vestido mujer', accessories: 'accesorio mujer',
+    skirt: 'falda mujer', dress: 'vestido mujer', accessories: 'accesorio mujer',
   }
   parts.push(CATEGORY_ES[category] ?? `${category} mujer`)
 

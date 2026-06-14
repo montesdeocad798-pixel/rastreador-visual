@@ -13,7 +13,7 @@ IGNORA completamente: fondo, persona, piel, cabello, entorno y cualquier prenda 
 
 Devuelve un objeto JSON con estos campos exactos:
 
-- categoria: una de estas IDs exactas según lo que ves → boots, sneakers, bag, jacket, shirt, pants, dress, accessories
+- categoria: una de estas IDs exactas según lo que ves → boots, sneakers, bag, jacket, shirt, pants, skirt, dress, accessories
 - subtipo: descripción corta del tipo de prenda (ej: "bota cowboy de caña alta", "blazer cruzado oversize")
 - color: color dominante en español, tan específico como puedas (ej: "marrón tostado", "azul marino", "blanco roto")
 - material: material principal estimado (ej: "cuero liso", "denim desgastado", "punto acanalado", "nylon acolchado")
