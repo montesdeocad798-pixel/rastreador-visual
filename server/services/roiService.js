@@ -2,10 +2,6 @@ import { CATEGORIES } from '../../src/config/storesConfig.js'
 
 export { CATEGORIES }
 
-/**
- * Construye el prompt de visión con enfoque ROI basado en la categoría.
- * Instruye a Gemini a ignorar todo excepto la prenda objetivo.
- */
 export function buildROIPrompt(categoryId) {
   const cat = CATEGORIES.find(c => c.id === categoryId)
   const roi = cat?.roi ?? 'prenda principal de moda'
@@ -13,26 +9,21 @@ export function buildROIPrompt(categoryId) {
   return `Eres un motor de análisis visual especializado en moda y e-commerce.
 
 OBJETIVO: Analiza ÚNICAMENTE el/la ${roi} visible en esta imagen.
-IGNORA completamente: fondo, persona, piel, cabello, entorno, accesorios no relevantes y cualquier otra prenda que no sea ${roi}.
+IGNORA completamente: fondo, persona, piel, cabello, entorno y cualquier prenda que no sea ${roi}.
 
-Extrae los siguientes atributos con la máxima precisión posible y devuelve SOLO el JSON (sin texto adicional):
+Devuelve un objeto JSON con estos campos exactos:
 
-{
-  "tipo": "descripción concisa del tipo de prenda (ej: 'bota cowboy de caña alta')",
-  "color_principal": "color dominante en español",
-  "colores_secundarios": ["color1"],
-  "material": "material estimado (cuero, ante, tela, sintético, punto, denim, etc.)",
-  "patron": "liso / rayas / cuadros / animal print / floral / tie-dye",
-  "silueta": "descripción de la forma y corte",
-  "detalles_clave": ["detalle visual más distintivo 1", "detalle 2", "detalle 3"],
-  "marca_visible": "nombre de la marca si aparece visible en logo o etiqueta, si no hay ninguna escribe null",
-  "genero_estimado": "mujer / hombre / unisex",
-  "temporada_estimada": "primavera-verano / otoño-invierno / todo el año",
-  "query_busqueda": "frase de búsqueda SEO de 5-8 palabras para shopping online, solo atributos visuales únicos"
-}
+- categoria: una de estas IDs exactas según lo que ves → boots, sneakers, bag, jacket, shirt, pants, dress, accessories
+- subtipo: descripción corta del tipo de prenda (ej: "bota cowboy de caña alta", "blazer cruzado oversize")
+- color: color dominante en español, tan específico como puedas (ej: "marrón tostado", "azul marino", "blanco roto")
+- material: material principal estimado (ej: "cuero liso", "denim desgastado", "punto acanalado", "nylon acolchado")
+- silueta: forma, corte y proporciones (ej: "caña alta, puntera en punta, suela plana", "talle alto, pernera ancha y recta")
+- detalles: array de 2-4 detalles visuales distintivos (ej: ["costuras decorativas en contraste", "hebilla dorada lateral"])
+- queryBusqueda: frase de búsqueda de 5-8 palabras con las mismas palabras que usaría un título de producto real en Zara, ASOS o Zalando. Incluye categoría, color, material y rasgo más distintivo. Añade el género si es claro. Ejemplos de buen formato: "botas cowboy caña alta cuero marrón mujer", "blazer oversize cuadros príncipe de gales mujer", "bolso shopper piel negro asa larga"
+- marca_visible: nombre de la marca si aparece en logo o etiqueta visible; si no hay ninguna escribe null
 
 Reglas críticas:
-- Si NO ves ninguna marca, escribe null en marca_visible. NO ASUMAS ninguna marca.
-- La query_busqueda debe ser concisa y específica para una búsqueda de shopping real.
-- Responde ÚNICAMENTE con el JSON, sin explicaciones adicionales.`
+- Si NO ves ninguna marca, escribe null en marca_visible. No asumas ninguna marca por el estilo.
+- queryBusqueda debe sonar a título de producto de tienda online, no a descripción literaria.
+- Responde ÚNICAMENTE con el JSON. Sin explicaciones, sin texto adicional.`
 }

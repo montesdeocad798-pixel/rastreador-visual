@@ -15,11 +15,10 @@ function tierOf(item) {
   for (const [domain, tier] of Object.entries(DOMAIN_TIER)) {
     if (url.includes(domain)) return tier
   }
-  return 99 // tienda no reconocida → va al final
+  return 99
 }
 
-// Reorder in-place: Tier 1 first, then 2, then 3, then unknown (99).
-// Never discards results — every product from Serper is kept.
+// Reorders results so Tier 1 stores appear first. Never discards results.
 function sortByTier(items) {
   return [...items].sort((a, b) => tierOf(a) - tierOf(b))
 }
@@ -28,7 +27,6 @@ function sortByTier(items) {
 
 export async function searchByQuery(queryStr, _category) {
   console.info(`[search] Query natural: "${queryStr}"`)
-
   const raw    = await callSerper(queryStr)
   const sorted = sortByTier(raw)
   const topTier = sorted.length > 0 ? tierOf(sorted[0]) : null
@@ -47,21 +45,19 @@ export async function searchByQuery(queryStr, _category) {
   }
 }
 
-// ── Gemini / classic path ────────────────────────────────────────────────────
+// ── Gemini / classic path ─────────────────────────────────────────────────────
 
 export async function searchProducts(attributes) {
-  const { query_busqueda, marca_visible, genero_estimado, brand_strategy } = attributes
+  // Support both new field names (queryBusqueda) and legacy (query_busqueda)
+  const queryBase = attributes.queryBusqueda ?? attributes.query_busqueda ?? ''
+  const marca     = attributes.marca_visible
+  const strategy  = attributes.brand_strategy
 
-  const genderSuffix = genero_estimado === 'mujer'  ? ' mujer'
-                     : genero_estimado === 'hombre' ? ' hombre'
-                     : ''
-
-  const query = brand_strategy === 'brand_match' && marca_visible
-    ? `${marca_visible} ${query_busqueda}${genderSuffix}`
-    : `${query_busqueda}${genderSuffix}`
+  const query = strategy === 'brand_match' && marca
+    ? `${marca} ${queryBase}`
+    : queryBase
 
   console.info(`[search] Query natural: "${query}"`)
-
   const raw    = await callSerper(query)
   const sorted = sortByTier(raw)
 
@@ -109,11 +105,14 @@ function cleanSource(source) {
 
 function scoreMatch(attributes, item, index) {
   let score = 72
-  const title = (item.title ?? '').toLowerCase()
-  if (attributes.color_principal && title.includes(attributes.color_principal.toLowerCase())) score += 8
-  if (attributes.material        && title.includes(attributes.material.toLowerCase()))        score += 8
-  const firstWord = (attributes.tipo ?? '').split(' ')[0].toLowerCase()
-  if (firstWord && title.includes(firstWord)) score += 8
+  const title    = (item.title ?? '').toLowerCase()
+  const color    = (attributes.color    ?? attributes.color_principal ?? '').toLowerCase()
+  const material = (attributes.material ?? '').toLowerCase()
+  const subtipo  = (attributes.subtipo  ?? attributes.tipo ?? '').split(' ')[0].toLowerCase()
+
+  if (color    && title.includes(color))    score += 8
+  if (material && title.includes(material)) score += 8
+  if (subtipo  && title.includes(subtipo))  score += 8
   score += Math.max(0, 6 - index)
   return Math.min(score, 98)
 }

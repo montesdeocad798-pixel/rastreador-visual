@@ -27,15 +27,15 @@ function normalizeProduct(p, index) {
 function AttributeChips({ attributes }) {
   if (!attributes) return null
 
-  // Gemini format
-  const isGemini = 'tipo' in attributes || 'color_principal' in attributes
+  // Gemini format (new: subtipo/color/queryBusqueda — or legacy: tipo/color_principal)
+  const isGemini = 'subtipo' in attributes || 'tipo' in attributes || 'color_principal' in attributes
   const chips = isGemini
     ? [
-        ['Tipo',      attributes.tipo],
-        ['Color',     attributes.color_principal],
-        ['Material',  attributes.material],
-        ['Marca',     attributes.marca_visible ?? 'No identificada'],
-        ['Estrategia', attributes.brand_strategy === 'brand_match' ? 'Por marca' : 'Visual'],
+        ['Tipo',     attributes.subtipo ?? attributes.tipo],
+        ['Color',    attributes.color   ?? attributes.color_principal],
+        ['Material', attributes.material],
+        ['Marca',    attributes.marca_visible ?? 'No identificada'],
+        ['Origen',   'Gemini Vision'],
       ]
     : [
         ['Color',    attributes.dominantColorName],

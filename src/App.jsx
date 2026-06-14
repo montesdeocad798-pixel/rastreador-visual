@@ -18,7 +18,6 @@ export default function App() {
   const [isDemo, setIsDemo]             = useState(false)
   const [error, setError]               = useState(null)
   const [scanProgress, setScanProgress] = useState('')
-  // sessionId and fingerprint are needed to send feedback back to the server
   const [sessionId, setSessionId]       = useState(null)
   const fingerprint                     = getFingerprint()
 
@@ -34,37 +33,70 @@ export default function App() {
     if (!uploadedFile || !category) return
     setStage('scanning')
     setError(null)
-    setScanProgress('Iniciando análisis local...')
 
+    let products = [], attrs = null, demo = false, sid = null
+
+    // ── Intento 1: Gemini Vision (imagen al servidor) ─────────────────────────
     try {
-      // 1. Analyze image locally in the browser — NO image is sent to the server
-      const localResult = await analyzeLocally(uploadedFile, category, setScanProgress)
+      setScanProgress('Analizando prenda con IA visual...')
 
-      setScanProgress('Buscando productos...')
+      const formData = new FormData()
+      formData.append('image', uploadedFile)
+      formData.append('category', category)
 
-      // 2. Send only the JSON metadata packet to the server
-      const res = await fetch('/api/analyze-local', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          category,
-          attributes:  localResult.attributes,
-          fingerprint: localResult.fingerprint,
-        }),
-      })
-
+      const res  = await fetch('/api/analyze', { method: 'POST', body: formData })
       const data = await res.json()
-      if (!res.ok) throw new Error(data.error ?? `Error ${res.status}`)
 
-      setProducts(data.products ?? [])
-      setAttributes(localResult.attributes)
-      setIsDemo(data.demo ?? false)
-      setSessionId(data.sessionId ?? null)
-      setStage('results')
-    } catch (err) {
-      setError(err.message)
-      setStage('error')
+      if (data.fallbackRequired) {
+        throw new Error(`gemini_unavailable: ${data.detail ?? data.error}`)
+      }
+      if (!res.ok) {
+        throw new Error(data.error ?? `Error ${res.status}`)
+      }
+
+      products = data.products  ?? []
+      attrs    = data.attributes ?? null
+      demo     = data.demo       ?? false
+
+    } catch (geminiErr) {
+      // ── Intento 2: análisis local en el navegador (fallback) ──────────────
+      console.warn('[App] Gemini no disponible, activando análisis local:', geminiErr.message)
+      try {
+        setScanProgress('IA visual no disponible — analizando en dispositivo...')
+
+        const localResult = await analyzeLocally(uploadedFile, category, setScanProgress)
+
+        setScanProgress('Buscando productos...')
+
+        const res  = await fetch('/api/analyze-local', {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            category,
+            attributes:  localResult.attributes,
+            fingerprint: localResult.fingerprint,
+          }),
+        })
+        const data = await res.json()
+        if (!res.ok) throw new Error(data.error ?? `Error ${res.status}`)
+
+        products = data.products ?? []
+        attrs    = localResult.attributes
+        demo     = data.demo ?? false
+        sid      = data.sessionId ?? null
+
+      } catch (localErr) {
+        setError(localErr.message)
+        setStage('error')
+        return
+      }
     }
+
+    setProducts(products)
+    setAttributes(attrs)
+    setIsDemo(demo)
+    setSessionId(sid)
+    setStage('results')
   }, [uploadedFile, category])
 
   const handleReset = useCallback(() => {
@@ -81,7 +113,7 @@ export default function App() {
   }, [imageUrl])
 
   const statusBadge = {
-    scanning: { text: 'Procesando en dispositivo...', cls: 'text-cyan-600 bg-cyan-50 animate-pulse' },
+    scanning: { text: 'Procesando...', cls: 'text-cyan-600 bg-cyan-50 animate-pulse' },
     results:  {
       text: isDemo ? 'Demo · Modo sin API' : 'Análisis completado',
       cls:  isDemo ? 'text-amber-600 bg-amber-50' : 'text-emerald-600 bg-emerald-50',
@@ -91,7 +123,6 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-50">
-      {/* Header */}
       <header className="h-16 bg-white border-b border-slate-100 flex items-center justify-between px-6 sticky top-0 z-10">
         <button onClick={stage !== 'idle' ? handleReset : undefined} className="flex items-center gap-2.5">
           <div className="w-7 h-7 rounded-lg bg-slate-900 flex items-center justify-center">
@@ -112,11 +143,8 @@ export default function App() {
         </div>
       </header>
 
-      {/* State machine */}
       <main>
-        {stage === 'idle' && (
-          <DropZone onUpload={handleImageUpload} />
-        )}
+        {stage === 'idle' && <DropZone onUpload={handleImageUpload} />}
 
         {stage === 'category' && (
           <CategorySelector

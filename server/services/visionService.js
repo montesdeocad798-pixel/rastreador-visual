@@ -2,7 +2,7 @@ import { GoogleGenAI } from '@google/genai'
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY })
 
-// ── Diagnóstico de API key al arrancar el servidor ───────────────────────────
+// ── Diagnóstico de API key al arrancar ───────────────────────────────────────
 const _key = process.env.GEMINI_API_KEY ?? ''
 if (_key) {
   const masked = `${_key.slice(0, 8)}...${_key.slice(-4)}`
@@ -13,11 +13,36 @@ if (_key) {
 
 const MODEL = 'gemini-2.5-flash'
 
+// Forced JSON schema — Gemini must return exactly this shape, no prose
+const RESPONSE_SCHEMA = {
+  type: 'object',
+  properties: {
+    categoria:     { type: 'string' },
+    subtipo:       { type: 'string' },
+    color:         { type: 'string' },
+    material:      { type: 'string' },
+    silueta:       { type: 'string' },
+    detalles:      { type: 'array', items: { type: 'string' } },
+    queryBusqueda: { type: 'string' },
+    marca_visible: { type: 'string', nullable: true },
+  },
+  required: ['categoria', 'subtipo', 'color', 'material', 'silueta', 'detalles', 'queryBusqueda'],
+}
+
 const MAX_RETRIES   = 3
-const BASE_DELAY_MS = 5_000   // 5 s → 10 s → 20 s (backoff x2 cada intento)
+const BASE_DELAY_MS = 5_000  // 5 s → 10 s → 20 s
 
 function sleep(ms) {
   return new Promise(r => setTimeout(r, ms))
+}
+
+// Strip markdown fences that some model versions add even with responseMimeType set
+function parseJSON(raw) {
+  const cleaned = raw
+    .replace(/^```(?:json)?\s*/i, '')
+    .replace(/\s*```\s*$/, '')
+    .trim()
+  return JSON.parse(cleaned)
 }
 
 export async function analyzeImageWithROI(imageBuffer, mimeType, roiPrompt) {
@@ -29,10 +54,8 @@ export async function analyzeImageWithROI(imageBuffer, mimeType, roiPrompt) {
 
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     if (attempt > 1) {
-      const delayMs = BASE_DELAY_MS * Math.pow(2, attempt - 2) // 5 000, 10 000, 20 000
-      console.warn(
-        `[visionService] Intento ${attempt}/${MAX_RETRIES} — esperando ${delayMs / 1000}s antes de reintentar...`
-      )
+      const delayMs = BASE_DELAY_MS * Math.pow(2, attempt - 2)
+      console.warn(`[visionService] Intento ${attempt}/${MAX_RETRIES} — esperando ${delayMs / 1000}s...`)
       await sleep(delayMs)
     }
 
@@ -40,23 +63,24 @@ export async function analyzeImageWithROI(imageBuffer, mimeType, roiPrompt) {
       const result = await ai.models.generateContent({
         model: MODEL,
         contents: [
-          {
-            parts: [
-              { text: roiPrompt },
-              imagePart,
-            ],
-          },
+          { parts: [{ text: roiPrompt }, imagePart] },
         ],
+        config: {
+          responseMimeType: 'application/json',
+          responseSchema:   RESPONSE_SCHEMA,
+        },
       })
 
-      const text = result.text.trim()
+      const raw = result.text?.trim() ?? ''
 
-      const jsonMatch = text.match(/\{[\s\S]*\}/)
-      if (!jsonMatch) {
-        throw new Error(`JSON no encontrado en respuesta: ${text.slice(0, 200)}`)
+      // Defensive parse — never let a malformed response throw a 500
+      let attributes
+      try {
+        attributes = parseJSON(raw)
+      } catch (parseErr) {
+        throw new Error(`JSON inválido de Gemini (${parseErr.message}): ${raw.slice(0, 200)}`)
       }
 
-      const attributes = JSON.parse(jsonMatch[0])
       if (!attributes.marca_visible || attributes.marca_visible === 'null') {
         attributes.marca_visible = null
       }
@@ -68,9 +92,7 @@ export async function analyzeImageWithROI(imageBuffer, mimeType, roiPrompt) {
       const status = err.message?.match(/\[(\d{3})/)?.[1]
 
       if (status === '404') {
-        throw new Error(
-          `Modelo '${MODEL}' no encontrado (404). Verifica el nombre en https://aistudio.google.com`
-        )
+        throw new Error(`Modelo '${MODEL}' no encontrado (404). Verifica el nombre en https://aistudio.google.com`)
       }
 
       if (status === '429' || status === '503') {
@@ -79,12 +101,12 @@ export async function analyzeImageWithROI(imageBuffer, mimeType, roiPrompt) {
         continue
       }
 
+      // JSON inválido u otro error → falla sin reintentar (no es un problema de quota)
       throw err
     }
   }
 
   throw new Error(
-    `Sin respuesta de Gemini tras ${MAX_RETRIES} intentos (backoff 5s→10s→20s). ` +
-    `Último error: ${lastError?.message?.slice(0, 300)}`
+    `Sin respuesta de Gemini tras ${MAX_RETRIES} intentos. Último error: ${lastError?.message?.slice(0, 300)}`
   )
 }
