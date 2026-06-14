@@ -4,12 +4,14 @@ import multer from 'multer'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import { SearchController } from './controllers/SearchController.js'
+import { LearnController } from './controllers/LearnController.js'
+import { runMigrations } from './services/postgresService.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const app = express()
 
 // ── Middleware ──────────────────────────────────────────────────
-app.use(express.json())
+app.use(express.json({ limit: '1mb' }))
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -22,7 +24,13 @@ const upload = multer({
 })
 
 // ── API Routes ──────────────────────────────────────────────────
+// Classic path: image → Gemini Vision → Serper search
 app.post('/api/analyze', upload.single('image'), SearchController.analyze)
+
+// Hybrid path: browser extracts attributes locally, sends only JSON
+app.post('/api/analyze-local', LearnController.analyzeLocal)
+app.post('/api/feedback',      LearnController.feedback)
+app.get('/api/config',         LearnController.getConfig)
 
 // ── Servir frontend estático en producción ──────────────────────
 if (process.env.NODE_ENV === 'production') {
@@ -39,8 +47,17 @@ app.use((err, _req, res, _next) => {
 })
 
 const PORT = process.env.PORT || 3001
-app.listen(PORT, () => {
-  const mode = process.env.NODE_ENV === 'production' ? 'PRODUCCIÓN' : 'DESARROLLO'
-  const keys = process.env.GEMINI_API_KEY && process.env.SERPER_API_KEY ? '✓ API keys configuradas' : '⚠ DEMO MODE (sin API keys)'
-  console.log(`[DXMG] Servidor ${mode} en puerto ${PORT} — ${keys}`)
-})
+
+// Run DB migrations then start listening
+runMigrations()
+  .catch(err => console.error('[DB] Migration error (non-fatal):', err.message))
+  .finally(() => {
+    app.listen(PORT, () => {
+      const mode = process.env.NODE_ENV === 'production' ? 'PRODUCCIÓN' : 'DESARROLLO'
+      const keys = process.env.GEMINI_API_KEY && process.env.SERPER_API_KEY
+        ? '✓ API keys configuradas'
+        : '⚠ DEMO MODE (sin API keys)'
+      const db = process.env.DATABASE_URL ? '✓ PostgreSQL conectado' : '⚠ sin DB'
+      console.log(`[DXMG] Servidor ${mode} en puerto ${PORT} — ${keys} — ${db}`)
+    })
+  })

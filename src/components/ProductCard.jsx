@@ -1,6 +1,6 @@
 import { BLOCK_THRESHOLD } from '../hooks/useFeedback'
 
-export default function ProductCard({ product, index, feedbackCount = 0, onFeedback }) {
+export default function ProductCard({ product, index, feedbackCount = 0, onFeedback, onConfirm }) {
   const matchStyle =
     product.match >= 95 ? 'text-emerald-600 bg-emerald-50'
     : product.match >= 88 ? 'text-sky-600 bg-sky-50'
@@ -84,17 +84,28 @@ export default function ProductCard({ product, index, feedbackCount = 0, onFeedb
           </button>
         )}
 
-        {/* Feedback */}
-        <button
-          onClick={() => onFeedback(product.id, { store: product.store })}
-          className={`w-full mt-2 py-1.5 text-[10px] rounded-lg transition-all duration-150 ${
-            feedbackCount > 0
-              ? 'text-rose-400 hover:text-rose-600 bg-rose-50 hover:bg-rose-100'
-              : 'text-slate-300 hover:text-slate-500 hover:bg-slate-50'
-          }`}
-        >
-          {feedbackCount > 0 ? `No se parece (${feedbackCount}×)` : 'No se parece'}
-        </button>
+        {/* Feedback row */}
+        <div className="flex gap-1.5 mt-2">
+          {onConfirm && (
+            <button
+              onClick={() => onConfirm(product.id, product.store)}
+              className="flex-1 py-1.5 text-[10px] rounded-lg text-emerald-400 hover:text-emerald-600 hover:bg-emerald-50 transition-all duration-150"
+              title="Confirmar coincidencia — mejora futuras búsquedas"
+            >
+              ✓ Sí
+            </button>
+          )}
+          <button
+            onClick={() => onFeedback(product.id, { store: product.store })}
+            className={`flex-1 py-1.5 text-[10px] rounded-lg transition-all duration-150 ${
+              feedbackCount > 0
+                ? 'text-rose-400 hover:text-rose-600 bg-rose-50 hover:bg-rose-100'
+                : 'text-slate-300 hover:text-slate-500 hover:bg-slate-50'
+            }`}
+          >
+            {feedbackCount > 0 ? `No (${feedbackCount}×)` : 'No se parece'}
+          </button>
+        </div>
       </div>
     </article>
   )

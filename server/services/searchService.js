@@ -3,6 +3,41 @@ import { STORE_TIERS, MIN_RESULTS } from '../../src/config/storesConfig.js'
 const SERPER_URL = 'https://google.serper.dev/shopping'
 
 /**
+ * Search by a plain query string (used by the hybrid/local analysis path).
+ * Returns { products, tierUsed }.
+ */
+export async function searchByQuery(queryStr, _category) {
+  for (const tierNum of [1, 2, 3]) {
+    const stores = STORE_TIERS[tierNum] ?? []
+    const siteFilter = stores.map(s => `site:${s.domain}`).join(' OR ')
+    const fullQuery = `${queryStr} (${siteFilter})`
+
+    console.info(`[search] Tier ${tierNum} (local): "${fullQuery}"`)
+
+    const raw = await callSerper(fullQuery)
+
+    if (raw.length >= MIN_RESULTS) {
+      return {
+        tierUsed: tierNum,
+        products: raw.map((item, i) => ({
+          nombre_producto: item.title ?? 'Producto',
+          precio_real:     item.price ?? 'Precio no disponible',
+          tienda_nombre:   cleanSource(item.source),
+          link_afiliado:   item.link,
+          imagen_url:      item.imageUrl ?? null,
+          match:           Math.min(98, 72 + Math.max(0, 6 - i)),
+          tier:            tierNum,
+        })),
+      }
+    }
+
+    console.info(`[search] Tier ${tierNum}: solo ${raw.length} resultados, escalando...`)
+  }
+
+  return { products: [], tierUsed: 3 }
+}
+
+/**
  * Busca productos reales usando Serper.dev Shopping API con cascada de tiers.
  *
  * Estrategia de query:

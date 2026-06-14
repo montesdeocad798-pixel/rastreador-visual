@@ -3,12 +3,13 @@ import DropZone from './components/DropZone'
 import CategorySelector from './components/CategorySelector'
 import ScanAnimation from './components/ScanAnimation'
 import ResultsGrid from './components/ResultsGrid'
+import { analyzeLocally, getFingerprint } from './services/browserAnalysis'
 import './index.css'
 
 // stages: 'idle' | 'category' | 'scanning' | 'results' | 'error'
 
 export default function App() {
-  const [stage, setStage] = useState('idle')
+  const [stage, setStage]               = useState('idle')
   const [uploadedFile, setUploadedFile] = useState(null)
   const [imageUrl, setImageUrl]         = useState(null)
   const [category, setCategory]         = useState(null)
@@ -16,6 +17,10 @@ export default function App() {
   const [attributes, setAttributes]     = useState(null)
   const [isDemo, setIsDemo]             = useState(false)
   const [error, setError]               = useState(null)
+  const [scanProgress, setScanProgress] = useState('')
+  // sessionId and fingerprint are needed to send feedback back to the server
+  const [sessionId, setSessionId]       = useState(null)
+  const fingerprint                     = getFingerprint()
 
   const handleImageUpload = useCallback((file) => {
     if (imageUrl) URL.revokeObjectURL(imageUrl)
@@ -29,20 +34,32 @@ export default function App() {
     if (!uploadedFile || !category) return
     setStage('scanning')
     setError(null)
+    setScanProgress('Iniciando análisis local...')
 
     try {
-      const formData = new FormData()
-      formData.append('image', uploadedFile)
-      formData.append('category', category)
+      // 1. Analyze image locally in the browser — NO image is sent to the server
+      const localResult = await analyzeLocally(uploadedFile, category, setScanProgress)
 
-      const res = await fetch('/api/analyze', { method: 'POST', body: formData })
+      setScanProgress('Buscando productos...')
+
+      // 2. Send only the JSON metadata packet to the server
+      const res = await fetch('/api/analyze-local', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          category,
+          attributes:  localResult.attributes,
+          fingerprint: localResult.fingerprint,
+        }),
+      })
+
       const data = await res.json()
-
       if (!res.ok) throw new Error(data.error ?? `Error ${res.status}`)
 
       setProducts(data.products ?? [])
-      setAttributes(data.attributes ?? null)
+      setAttributes(localResult.attributes)
       setIsDemo(data.demo ?? false)
+      setSessionId(data.sessionId ?? null)
       setStage('results')
     } catch (err) {
       setError(err.message)
@@ -58,13 +75,18 @@ export default function App() {
     setProducts([])
     setAttributes(null)
     setError(null)
+    setSessionId(null)
+    setScanProgress('')
     setStage('idle')
   }, [imageUrl])
 
   const statusBadge = {
-    scanning: { text: 'Procesando...', cls: 'text-cyan-600 bg-cyan-50 animate-pulse' },
-    results:  { text: isDemo ? 'Demo · Modo sin API' : 'Análisis completado', cls: isDemo ? 'text-amber-600 bg-amber-50' : 'text-emerald-600 bg-emerald-50' },
-    error:    { text: 'Error en análisis', cls: 'text-rose-600 bg-rose-50' },
+    scanning: { text: 'Procesando en dispositivo...', cls: 'text-cyan-600 bg-cyan-50 animate-pulse' },
+    results:  {
+      text: isDemo ? 'Demo · Modo sin API' : 'Análisis completado',
+      cls:  isDemo ? 'text-amber-600 bg-amber-50' : 'text-emerald-600 bg-emerald-50',
+    },
+    error: { text: 'Error en análisis', cls: 'text-rose-600 bg-rose-50' },
   }[stage]
 
   return (
@@ -107,7 +129,7 @@ export default function App() {
         )}
 
         {stage === 'scanning' && (
-          <ScanAnimation image={imageUrl} category={category} />
+          <ScanAnimation image={imageUrl} category={category} progress={scanProgress} />
         )}
 
         {stage === 'results' && (
@@ -117,6 +139,9 @@ export default function App() {
             attributes={attributes}
             isDemo={isDemo}
             onReset={handleReset}
+            sessionId={sessionId}
+            fingerprint={fingerprint}
+            category={category}
           />
         )}
 
