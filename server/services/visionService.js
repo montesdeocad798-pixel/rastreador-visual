@@ -1,20 +1,18 @@
 import { GoogleGenerativeAI } from '@google/generative-ai'
 
-// Orden de modelos por preferencia.
-// El SDK llama a la API v1beta; gemini-2.0-flash requiere plan de pago.
-// gemini-1.5-flash-8b y gemini-1.5-flash están disponibles en el plan gratuito.
+// El SDK @google/generative-ai usa /v1beta/ por defecto.
+// Los modelos gemini-1.5-* fueron migrados a /v1/ (API estable).
+// Sin apiVersion:'v1', todos devuelven 404 aunque la key sea válida.
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY, {
+  apiVersion: 'v1',
+})
+
 const MODEL_PRIORITY = [
-  'gemini-1.5-flash-8b',   // free tier — rápido, soporta visión
-  'gemini-1.5-flash',      // free tier — más preciso
-  'gemini-2.0-flash',      // pay-as-you-go
+  'gemini-1.5-flash-8b',  // free tier — rápido, visión OK
+  'gemini-1.5-flash',     // free tier — más preciso
+  'gemini-2.0-flash',     // pay-as-you-go (por si tienen billing)
 ]
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY)
-
-/**
- * Analiza una imagen usando Gemini Vision con el prompt ROI dado.
- * Prueba los modelos en orden hasta que uno responda correctamente.
- */
 export async function analyzeImageWithROI(imageBuffer, mimeType, roiPrompt) {
   const imagePart = {
     inlineData: {
@@ -41,25 +39,20 @@ export async function analyzeImageWithROI(imageBuffer, mimeType, roiPrompt) {
         attributes.marca_visible = null
       }
 
-      console.info(`[visionService] Análisis OK con modelo: ${modelName}`)
+      console.info(`[visionService] OK con modelo: ${modelName}`)
       return attributes
     } catch (err) {
-      const is404   = err.message?.includes('404')
-      const is429   = err.message?.includes('429')
-      const isQuota = err.message?.includes('quota') || err.message?.includes('Quota')
-
-      if (is404 || is429 || isQuota) {
-        console.warn(`[visionService] ${modelName} no disponible (${is404 ? '404' : '429/quota'}), probando siguiente...`)
+      const status = err.message?.match(/\[(\d{3})/)?.[1]
+      if (['404', '429', '503'].includes(status)) {
+        console.warn(`[visionService] ${modelName} → ${status}, probando siguiente...`)
         lastError = err
         continue
       }
-
-      // Error distinto (red, JSON inválido, etc.) → propagar inmediatamente
       throw err
     }
   }
 
   throw new Error(
-    `Ningún modelo Gemini disponible para tu plan. Último error: ${lastError?.message?.slice(0, 300)}`
+    `Sin modelos Gemini disponibles. Último error: ${lastError?.message?.slice(0, 300)}`
   )
 }
